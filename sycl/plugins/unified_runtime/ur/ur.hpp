@@ -253,6 +253,7 @@ extern bool PiPlatformCachePopulated;
 
 // The getInfo*/ReturnHelper facilities provide shortcut way of
 // writing return bytes for the various getInfo APIs.
+namespace ur {
 template <typename T, typename Assign>
 zer_result_t getInfoImpl(size_t param_value_size, void *param_value,
                          size_t *param_value_size_ret, T value,
@@ -316,6 +317,7 @@ getInfo<const char *>(size_t param_value_size, void *param_value,
   return getInfoArray(strlen(value) + 1, param_value_size, param_value,
                       param_value_size_ret, value);
 }
+} // namespace ur
 
 class UrReturnHelper {
 public:
@@ -332,20 +334,20 @@ public:
 
   // Scalar return value
   template <class T> zer_result_t operator()(const T &t) {
-    return getInfo(param_value_size, param_value, param_value_size_ret, t);
+    return ur::getInfo(param_value_size, param_value, param_value_size_ret, t);
   }
 
   // Array return value
   template <class T> zer_result_t operator()(const T *t, size_t s) {
-    return getInfoArray(s, param_value_size, param_value, param_value_size_ret,
-                        t);
+    return ur::getInfoArray(s, param_value_size, param_value,
+                            param_value_size_ret, t);
   }
 
   // Array return value where element type is differrent from T
   template <class RetType, class T>
   zer_result_t operator()(const T *t, size_t s) {
-    return getInfoArray<T, RetType>(s, param_value_size, param_value,
-                                    param_value_size_ret, t);
+    return ur::getInfoArray<T, RetType>(s, param_value_size, param_value,
+                                        param_value_size_ret, t);
   }
 
 protected:
