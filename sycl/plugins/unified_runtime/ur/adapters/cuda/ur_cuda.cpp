@@ -313,28 +313,26 @@ ZER_APIEXPORT zer_result_t ZER_APICALL zerDeviceGetInfo(
   // TODO(UR): implement the two queries below when the UR commit is updated
   // to the newest version
   case ZER_DEVICE_INFO_ATOMIC_MEMORY_ORDER_CAPABILITIES: {
-    uint64_t capabilities = 0;
-    // pi_memory_order_capabilities capabilities =
-        // PI_MEMORY_ORDER_RELAXED | PI_MEMORY_ORDER_ACQUIRE |
-        // PI_MEMORY_ORDER_RELEASE | PI_MEMORY_ORDER_ACQ_REL;
+    uint64_t capabilities =
+        PI_MEMORY_ORDER_RELAXED | PI_MEMORY_ORDER_ACQUIRE |
+        PI_MEMORY_ORDER_RELEASE | PI_MEMORY_ORDER_ACQ_REL;
     return ReturnValue(capabilities);
   }
   case ZER_EXT_DEVICE_INFO_ATOMIC_MEMORY_SCOPE_CAPABILITIES: {
-    uint64_t capabilities = 0;
-    // int major = 0;
-    // sycl::detail::ur::assertion(
-    //     cuDeviceGetAttribute(&major,
-    //                          CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR,
-    //                          device->get()) == CUDA_SUCCESS);
-    // pi_memory_order_capabilities capabilities =
-    //     (major >= 7) ? PI_MEMORY_SCOPE_WORK_ITEM | PI_MEMORY_SCOPE_SUB_GROUP
-    //     |
-    //                        PI_MEMORY_SCOPE_WORK_GROUP |
-    //                        PI_MEMORY_SCOPE_DEVICE | PI_MEMORY_SCOPE_SYSTEM
-    //                  : PI_MEMORY_SCOPE_WORK_ITEM | PI_MEMORY_SCOPE_SUB_GROUP
-    //                  |
-    //                        PI_MEMORY_SCOPE_WORK_GROUP |
-    //                        PI_MEMORY_SCOPE_DEVICE;
+    int major = 0;
+    sycl::detail::ur::assertion(
+        cuDeviceGetAttribute(&major,
+                             CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR,
+                             device->get()) == CUDA_SUCCESS);
+    uint64_t capabilities =
+        (major >= 7) ? PI_MEMORY_SCOPE_WORK_ITEM | PI_MEMORY_SCOPE_SUB_GROUP
+        |
+                           PI_MEMORY_SCOPE_WORK_GROUP |
+                           PI_MEMORY_SCOPE_DEVICE | PI_MEMORY_SCOPE_SYSTEM
+                     : PI_MEMORY_SCOPE_WORK_ITEM | PI_MEMORY_SCOPE_SUB_GROUP
+                     |
+                           PI_MEMORY_SCOPE_WORK_GROUP |
+                           PI_MEMORY_SCOPE_DEVICE;
     return ReturnValue(capabilities);
   }
   case ZER_EXT_DEVICE_INFO_BFLOAT16_MATH_FUNCTIONS: {
@@ -895,22 +893,22 @@ ZER_APIEXPORT zer_result_t ZER_APICALL zerDeviceGetInfo(
     return ReturnValue(value);
   }
     // TODO(UR): Implement the below queries once the latest version of UR is
-    // used case PI_EXT_ONEAPI_DEVICE_INFO_CUDA_ASYNC_BARRIER: {
-    //   int value =
-    //       getAttribute(device, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR)
-    //       >= 8;
-    //   return ReturnValue(value);
-    // }
-    // case PI_DEVICE_INFO_BACKEND_VERSION: {
-    //   int major =
-    //       getAttribute(device, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR);
-    //   int minor =
-    //       getAttribute(device, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR);
-    //   std::string result = std::to_string(major) + "." +
-    //   std::to_string(minor); return getInfo(param_value_size, param_value,
-    //   param_value_size_ret,
-    //                  result.c_str());
-    // }
+    // used 
+    case ZER_EXT_DEVICE_INFO_CUDA_ASYNC_BARRIER: {
+      int value =
+          getAttribute(device, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR)
+          >= 8;
+      return ReturnValue(value);
+    }
+    case ZER_EXT_DEVICE_INFO_BACKEND_VERSION: {
+      int major =
+          getAttribute(device, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR);
+      int minor =
+          getAttribute(device, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR);
+      std::string result = std::to_string(major) + "." +
+      std::to_string(minor);
+      return ReturnValue(result.c_str());
+    }
 
   case ZER_EXT_DEVICE_INFO_FREE_MEMORY: {
     size_t FreeMemory = 0;

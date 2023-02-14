@@ -488,7 +488,11 @@ inline pi_result piDeviceGetInfo(pi_device Device, pi_device_info ParamName,
        (zer_device_info_t)ZER_EXT_DEVICE_INFO_BFLOAT16_MATH_FUNCTIONS},
       {PI_DEVICE_INFO_ATOMIC_MEMORY_SCOPE_CAPABILITIES,
        (zer_device_info_t)ZER_EXT_DEVICE_INFO_ATOMIC_MEMORY_SCOPE_CAPABILITIES},
-  };
+      {PI_EXT_ONEAPI_DEVICE_INFO_CUDA_ASYNC_BARRIER,
+       (zer_device_info_t)ZER_EXT_DEVICE_INFO_CUDA_ASYNC_BARRIER},
+      {PI_DEVICE_INFO_BACKEND_VERSION,
+       (zer_device_info_t) ZER_EXT_DEVICE_INFO_BACKEND_VERSION},
+    };
 
   auto InfoType = InfoMapping.find(ParamName);
   if (InfoType == InfoMapping.end()) {
