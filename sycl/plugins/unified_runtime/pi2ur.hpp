@@ -160,8 +160,8 @@ public:
   }
 };
 
-// Translate UR info values to PI info values
-inline pi_result ur2piInfoValue(zer_device_info_t ParamName,
+// Translate UR device info values to PI info values
+inline pi_result ur2piDeviceInfoValue(zer_device_info_t ParamName,
                                 size_t ParamValueSizePI,
                                 size_t *ParamValueSizeUR, void *ParamValue) {
 
@@ -504,7 +504,8 @@ inline pi_result piDeviceGetInfo(pi_device Device, pi_device_info ParamName,
   HANDLE_ERRORS(
       zerDeviceGetInfo(hDevice, InfoType->second, &SizeInOut, ParamValue));
 
-  ur2piInfoValue(InfoType->second, ParamValueSize, &SizeInOut, ParamValue);
+  ur2piDeviceInfoValue(InfoType->second, ParamValueSize, &SizeInOut,
+                       ParamValue);
 
   if (ParamValueSizeRet) {
     *ParamValueSizeRet = SizeInOut;
@@ -577,4 +578,75 @@ inline pi_result piDevicePartition(
   }
   return PI_SUCCESS;
 }
+
+inline pi_result piContextCreate(const pi_context_properties *properties,
+                          pi_uint32 num_devices, const pi_device *devices,
+                          void (*pfn_notify)(const char *errinfo,
+                                             const void *private_info,
+                                             size_t cb, void *user_data),
+                          void *user_data, pi_context *retcontext) {
+  // TODO: Implement callback (if needed)
+  auto hDevicesConst = reinterpret_cast<const zer_device_handle_t *>(devices);
+  auto hDevices = const_cast<zer_device_handle_t *>(hDevicesConst);
+  auto phContext = reinterpret_cast<zer_context_handle_t *>(retcontext);
+
+  HANDLE_ERRORS(zerContextCreate(num_devices, hDevices, phContext));
+
+  return PI_SUCCESS;
+}
+
+inline pi_result piContextGetInfo(pi_context context,
+                                  pi_context_info param_name,
+                                  size_t param_value_size, void *param_value,
+                                  size_t *param_value_size_ret) {
+  static std::unordered_map<pi_context_info, zer_context_info_t> InfoMapping = {
+      {PI_CONTEXT_INFO_NUM_DEVICES, ZER_CONTEXT_INFO_NUM_DEVICES},
+      {PI_CONTEXT_INFO_DEVICES, ZER_CONTEXT_INFO_DEVICES},
+      {PI_CONTEXT_INFO_REFERENCE_COUNT,
+       (zer_context_info_t)ZER_EXT_CONTEXT_INFO_REFERENCE_COUNT},
+      {PI_CONTEXT_INFO_ATOMIC_MEMORY_ORDER_CAPABILITIES,
+       (zer_context_info_t)
+           ZER_EXT_CONTEXT_INFO_ATOMIC_MEMORY_ORDER_CAPABILITIES},
+      {PI_CONTEXT_INFO_ATOMIC_MEMORY_SCOPE_CAPABILITIES,
+       (zer_context_info_t)
+           ZER_EXT_CONTEXT_INFO_ATOMIC_MEMORY_SCOPE_CAPABILITIES},
+      {PI_EXT_ONEAPI_CONTEXT_INFO_USM_MEMCPY2D_SUPPORT,
+       (zer_context_info_t)ZER_EXT_CONTEXT_INFO_USM_MEMCPY2D_SUPPORT},
+      {PI_EXT_ONEAPI_CONTEXT_INFO_USM_FILL2D_SUPPORT,
+       (zer_context_info_t)ZER_EXT_CONTEXT_INFO_USM_FILL2D_SUPPORT},
+      {PI_EXT_ONEAPI_CONTEXT_INFO_USM_MEMSET2D_SUPPORT,
+       (zer_context_info_t)ZER_EXT_CONTEXT_INFO_USM_MEMSET2D_SUPPORT},
+  };
+
+  auto InfoType = InfoMapping.find(param_name);
+  if (InfoType == InfoMapping.end()) {
+    return PI_ERROR_UNKNOWN;
+  }
+
+  size_t SizeInOut = param_value_size;
+  auto hContext = reinterpret_cast<zer_context_handle_t>(context);
+  HANDLE_ERRORS(
+      zerContextGetInfo(hContext, InfoType->second, &SizeInOut, param_value));
+
+  if (param_value_size_ret) {
+    *param_value_size_ret = SizeInOut;
+  }
+
+  return PI_SUCCESS;
+}
+
+inline pi_result piContextRetain(pi_context context) {
+  auto hContext = reinterpret_cast<zer_context_handle_t>(context);
+  HANDLE_ERRORS(zerContextGetReference(hContext));
+
+  return PI_SUCCESS;
+}
+
+inline pi_result piContextRelease(pi_context context) {
+  auto hContext = reinterpret_cast<zer_context_handle_t>(context);
+  HANDLE_ERRORS(zerContextRelease(hContext));
+
+  return PI_SUCCESS;
+}
+
 } // namespace pi2ur

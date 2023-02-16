@@ -125,6 +125,35 @@ int getAttribute(zer_device_handle_t device, CUdevice_attribute attribute) {
   return value;
 }
 
+class ScopedContext {
+public:
+  ScopedContext(zer_context_handle_t ctxt) {
+    if (!ctxt) {
+      throw ZER_RESULT_INVALID_CONTEXT;
+    }
+
+    set_context(ctxt->get());
+  }
+
+  ScopedContext(CUcontext ctxt) { set_context(ctxt); }
+
+  ~ScopedContext() {}
+
+private:
+  void set_context(CUcontext desired) {
+    CUcontext original = nullptr;
+
+    PI_CHECK_ERROR(cuCtxGetCurrent(&original));
+
+    // Make sure the desired context is active on the current thread, setting
+    // it if necessary
+    if (original != desired) {
+      PI_CHECK_ERROR(cuCtxSetCurrent(desired));
+    }
+  }
+};
+
+
 // ---------------------------------------------------------------------------
 
 ZER_APIEXPORT zer_result_t ZER_APICALL zerDeviceGetInfo(
@@ -1209,5 +1238,121 @@ ZER_APIEXPORT zer_result_t ZER_APICALL zerDeviceGet(
     return ZER_RESULT_OUT_OF_RESOURCES;
   }
 }
+
+
+/// Create a UR CUDA context.
+///
+/// By default creates a scoped context and keeps the last active CUDA context
+/// on top of the CUDA context stack.
+/// With the __SYCL_PI_CONTEXT_PROPERTIES_CUDA_PRIMARY key/id and a value of
+/// PI_TRUE creates a primary CUDA context and activates it on the CUDA context
+/// stack.
+///
+ZER_APIEXPORT zer_result_t ZER_APICALL
+zerContextCreate(uint32_t DeviceCount, zer_device_handle_t *phDevices,
+                 zer_context_handle_t *phContext) {
+  assert(phDevices != nullptr);
+  assert(DeviceCount == 1);
+  assert(phContext != nullptr);
+  zer_result_t errcode_ret = ZER_RESULT_SUCCESS;
+
+  std::unique_ptr<_ur_context_handle_t> piContextPtr{nullptr};
+  try {
+    piContextPtr =
+        std::unique_ptr<_ur_context_handle_t>(new _ur_context_handle_t{
+            reinterpret_cast<_ur_device_handle_t *>(*phDevices)});
+    ScopedContext active{piContextPtr->get_device()->get_context()};
+
+    static std::once_flag initFlag;
+    std::call_once(
+        initFlag,
+        [](zer_result_t &err) {
+          // Use default stream to record base event counter
+          PI_CHECK_ERROR(
+              cuEventCreate(&_ur_platform_handle_t::evBase_, CU_EVENT_DEFAULT));
+          PI_CHECK_ERROR(cuEventRecord(_ur_platform_handle_t::evBase_, 0));
+        },
+        errcode_ret);
+
+    *phContext = reinterpret_cast<zer_context_handle_t>(piContextPtr.release());
+  } catch (zer_result_t err) {
+    errcode_ret = err;
+  } catch (...) {
+    errcode_ret = ZER_RESULT_OUT_OF_RESOURCES;
+  }
+  return errcode_ret;
+}
+
+ZER_APIEXPORT zer_result_t ZER_APICALL zerContextGetInfo(
+    zer_context_handle_t hContext, zer_context_info_t ContextInfoType,
+    size_t *pSize, void *pContextInfo) {
+  PI_ASSERT(hContext, ZER_RESULT_INVALID_CONTEXT);
+
+  UrReturnHelper ReturnValue(pSize, pContextInfo);
+
+  switch (uint32_t{ContextInfoType}) {
+  case ZER_CONTEXT_INFO_NUM_DEVICES:
+    return ReturnValue(1);
+  case ZER_CONTEXT_INFO_DEVICES:
+    return ReturnValue(hContext->get_device());
+  case ZER_EXT_CONTEXT_INFO_REFERENCE_COUNT:
+    return ReturnValue(hContext->get_reference_count());
+  case ZER_EXT_CONTEXT_INFO_ATOMIC_MEMORY_ORDER_CAPABILITIES: {
+    uint32_t capabilities = PI_MEMORY_ORDER_RELAXED | PI_MEMORY_ORDER_ACQUIRE |
+                            PI_MEMORY_ORDER_RELEASE | PI_MEMORY_ORDER_ACQ_REL;
+    return ReturnValue(capabilities);
+  }
+  case ZER_EXT_CONTEXT_INFO_ATOMIC_MEMORY_SCOPE_CAPABILITIES: {
+    int major = 0;
+    sycl::detail::ur::assertion(
+        cuDeviceGetAttribute(&major,
+                             CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR,
+                             hContext->get_device()->get()) == CUDA_SUCCESS);
+    uint32_t capabilities =
+        (major >= 7) ? PI_MEMORY_SCOPE_WORK_ITEM | PI_MEMORY_SCOPE_SUB_GROUP |
+                           PI_MEMORY_SCOPE_WORK_GROUP | PI_MEMORY_SCOPE_DEVICE |
+                           PI_MEMORY_SCOPE_SYSTEM
+                     : PI_MEMORY_SCOPE_WORK_ITEM | PI_MEMORY_SCOPE_SUB_GROUP |
+                           PI_MEMORY_SCOPE_WORK_GROUP | PI_MEMORY_SCOPE_DEVICE;
+    return ReturnValue(capabilities);
+  }
+  case ZER_EXT_CONTEXT_INFO_USM_MEMCPY2D_SUPPORT:
+    // 2D USM memcpy is supported.
+    return ReturnValue(static_cast<uint32_t>(true));
+  case ZER_EXT_CONTEXT_INFO_USM_FILL2D_SUPPORT:
+  case ZER_EXT_CONTEXT_INFO_USM_MEMSET2D_SUPPORT:
+    // 2D USM operations currently not supported.
+    return ReturnValue(static_cast<uint32_t>(false));
+
+  default:
+    break;
+  }
+  sycl::detail::ur::die("Context info request not implemented");
+  return {};
+}
+
+ZER_APIEXPORT zer_result_t ZER_APICALL
+zerContextRelease(zer_context_handle_t ctxt) {
+  assert(ctxt != nullptr);
+
+  if (ctxt->decrement_reference_count() > 0) {
+    return ZER_RESULT_SUCCESS;
+  }
+  ctxt->invoke_extended_deleters();
+
+  std::unique_ptr<_zer_context_handle_t> context{ctxt};
+
+  return ZER_RESULT_SUCCESS;
+}
+
+ZER_APIEXPORT zer_result_t ZER_APICALL
+zerContextGetReference(zer_context_handle_t ctxt) {
+  assert(ctxt != nullptr);
+  assert(ctxt->get_reference_count() > 0);
+
+  ctxt->increment_reference_count();
+  return ZER_RESULT_SUCCESS;
+}
+
 
 CUevent _ur_platform_handle_t::evBase_{nullptr};
