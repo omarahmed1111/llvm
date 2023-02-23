@@ -655,106 +655,6 @@ pi_result enqueueEventWait(pi_queue queue, pi_event event) {
   return PI_SUCCESS;
 }
 
-_pi_program::_pi_program(pi_context ctxt)
-    : module_{nullptr}, binary_{}, binarySizeInBytes_{0}, refCount_{1},
-      context_{ctxt}, kernelReqdWorkGroupSizeMD_{} {
-  cuda_piContextRetain(context_);
-}
-
-_pi_program::~_pi_program() { cuda_piContextRelease(context_); }
-
-std::pair<std::string, std::string>
-splitMetadataName(const std::string &metadataName) {
-  size_t splitPos = metadataName.rfind('@');
-  if (splitPos == std::string::npos)
-    return std::make_pair(metadataName, std::string{});
-  return std::make_pair(metadataName.substr(0, splitPos),
-                        metadataName.substr(splitPos, metadataName.length()));
-}
-
-pi_result _pi_program::set_metadata(const pi_device_binary_property *metadata,
-                                    size_t length) {
-  for (size_t i = 0; i < length; ++i) {
-    const pi_device_binary_property metadataElement = metadata[i];
-    std::string metadataElementName{metadataElement->Name};
-
-    auto [prefix, tag] = splitMetadataName(metadataElementName);
-
-    if (tag == __SYCL_PI_PROGRAM_METADATA_TAG_REQD_WORK_GROUP_SIZE) {
-      // If metadata is reqd_work_group_size, record it for the corresponding
-      // kernel name.
-      size_t MDElemsSize = metadataElement->ValSize - sizeof(std::uint64_t);
-
-      // Expect between 1 and 3 32-bit integer values.
-      assert(MDElemsSize >= sizeof(std::uint32_t) &&
-             MDElemsSize <= sizeof(std::uint32_t) * 3 &&
-             "Unexpected size for reqd_work_group_size metadata");
-
-      // Get pointer to data, skipping 64-bit size at the start of the data.
-      const char *ValuePtr =
-          reinterpret_cast<const char *>(metadataElement->ValAddr) +
-          sizeof(std::uint64_t);
-      // Read values and pad with 1's for values not present.
-      std::uint32_t reqdWorkGroupElements[] = {1, 1, 1};
-      std::memcpy(reqdWorkGroupElements, ValuePtr, MDElemsSize);
-      kernelReqdWorkGroupSizeMD_[prefix] =
-          std::make_tuple(reqdWorkGroupElements[0], reqdWorkGroupElements[1],
-                          reqdWorkGroupElements[2]);
-    } else if (tag == __SYCL_PI_PROGRAM_METADATA_GLOBAL_ID_MAPPING) {
-      const char *metadataValPtr =
-          reinterpret_cast<const char *>(metadataElement->ValAddr) +
-          sizeof(std::uint64_t);
-      const char *metadataValPtrEnd =
-          metadataValPtr + metadataElement->ValSize - sizeof(std::uint64_t);
-      globalIDMD_[prefix] = std::string{metadataValPtr, metadataValPtrEnd};
-    }
-  }
-  return PI_SUCCESS;
-}
-
-pi_result _pi_program::set_binary(const char *source, size_t length) {
-  assert((binary_ == nullptr && binarySizeInBytes_ == 0) &&
-         "Re-setting program binary data which has already been set");
-  binary_ = source;
-  binarySizeInBytes_ = length;
-  return PI_SUCCESS;
-}
-
-pi_result _pi_program::build_program(const char *build_options) {
-
-  this->buildOptions_ = build_options;
-
-  constexpr const unsigned int numberOfOptions = 4u;
-
-  CUjit_option options[numberOfOptions];
-  void *optionVals[numberOfOptions];
-
-  // Pass a buffer for info messages
-  options[0] = CU_JIT_INFO_LOG_BUFFER;
-  optionVals[0] = (void *)infoLog_;
-  // Pass the size of the info buffer
-  options[1] = CU_JIT_INFO_LOG_BUFFER_SIZE_BYTES;
-  optionVals[1] = (void *)(long)MAX_LOG_SIZE;
-  // Pass a buffer for error message
-  options[2] = CU_JIT_ERROR_LOG_BUFFER;
-  optionVals[2] = (void *)errorLog_;
-  // Pass the size of the error buffer
-  options[3] = CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES;
-  optionVals[3] = (void *)(long)MAX_LOG_SIZE;
-
-  auto result = PI_CHECK_ERROR(
-      cuModuleLoadDataEx(&module_, static_cast<const void *>(binary_),
-                         numberOfOptions, options, optionVals));
-
-  const auto success = (result == PI_SUCCESS);
-
-  buildStatus_ =
-      success ? PI_PROGRAM_BUILD_STATUS_SUCCESS : PI_PROGRAM_BUILD_STATUS_ERROR;
-
-  // If no exception, result is correct
-  return success ? PI_SUCCESS : PI_ERROR_BUILD_PROGRAM_FAILURE;
-}
-
 /// Finds kernel names by searching for entry points in the PTX source, as the
 /// CUDA driver API doesn't expose an operation for this.
 /// Note: This is currently only being used by the SYCL program class for the
@@ -1637,7 +1537,8 @@ pi_result cuda_piKernelCreate(pi_program program, const char *kernel_name,
   std::unique_ptr<_pi_kernel> retKernel{nullptr};
 
   try {
-    ScopedContext active(program->get_context());
+    // TODO(ur): Remove cast when this entry point is moved to UR
+    ScopedContext active(reinterpret_cast<pi_context>(program->get_context()));
 
     CUfunction cuFunc;
     retErr = PI_CHECK_ERROR(
@@ -1657,7 +1558,8 @@ pi_result cuda_piKernelCreate(pi_program program, const char *kernel_name,
 
     retKernel = std::unique_ptr<_pi_kernel>(
         new _pi_kernel{cuFunc, cuFuncWithOffsetParam, kernel_name, program,
-                       program->get_context()});
+        // TODO(ur): Remove cast when this entry point is moved to UR
+        reinterpret_cast<pi_context>(program->get_context())});
   } catch (pi_result err) {
     retErr = err;
   } catch (...) {
@@ -2178,7 +2080,8 @@ pi_result cuda_piProgramBuild(pi_program program, pi_uint32 num_devices,
   pi_result retError = PI_SUCCESS;
 
   try {
-    ScopedContext active(program->get_context());
+    // TODO(ur): Remove cast when this entry point is moved to UR
+    ScopedContext active(reinterpret_cast<pi_context>(program->get_context()));
 
     program->build_program(options);
 
@@ -2317,7 +2220,6 @@ pi_result cuda_piProgramLink(pi_context context, pi_uint32 num_devices,
       if (retError != PI_SUCCESS) {
         return retError;
       }
-
       retError = retProgram->build_program(options);
 
       if (retError != PI_SUCCESS) {
@@ -2360,7 +2262,8 @@ pi_result cuda_piProgramCompile(
   pi_result retError = PI_SUCCESS;
 
   try {
-    ScopedContext active(program->get_context());
+    // TODO(ur): Remove cast when this entry point is moved to UR
+    ScopedContext active(reinterpret_cast<pi_context>(program->get_context()));
 
     program->build_program(options);
 
@@ -2423,7 +2326,8 @@ pi_result cuda_piProgramRelease(pi_program program) {
     pi_result result = PI_ERROR_INVALID_PROGRAM;
 
     try {
-      ScopedContext active(program->get_context());
+      // TODO(ur): Remove cast when this entry point is moved to UR
+      ScopedContext active(reinterpret_cast<pi_context>(program->get_context()));
       auto cuModule = program->get();
       result = PI_CHECK_ERROR(cuModuleUnload(cuModule));
     } catch (...) {

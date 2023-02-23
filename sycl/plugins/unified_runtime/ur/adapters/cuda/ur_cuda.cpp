@@ -1354,5 +1354,105 @@ zerContextGetReference(zer_context_handle_t ctxt) {
   return ZER_RESULT_SUCCESS;
 }
 
-
 CUevent _ur_platform_handle_t::evBase_{nullptr};
+
+_ur_program_handle_t::_ur_program_handle_t(ur_context_handle_t ctxt)
+    : module_{nullptr}, binary_{}, binarySizeInBytes_{0}, refCount_{1},
+      context_{ctxt}, kernelReqdWorkGroupSizeMD_{} {
+  zerContextGetReference(reinterpret_cast<zer_context_handle_t>(context_));
+}
+
+_ur_program_handle_t::~_ur_program_handle_t() { 
+  zerContextRelease(reinterpret_cast<zer_context_handle_t>(context_)); 
+}
+
+std::pair<std::string, std::string> splitMetadataName(const std::string &metadataName) {
+  size_t splitPos = metadataName.rfind('@');
+  if (splitPos == std::string::npos)
+    return std::make_pair(metadataName, std::string{});
+  return std::make_pair(metadataName.substr(0, splitPos),
+                        metadataName.substr(splitPos, metadataName.length()));
+}
+
+pi_result _ur_program_handle_t::set_metadata(const pi_device_binary_property *metadata,
+                                    size_t length) {
+  for (size_t i = 0; i < length; ++i) {
+    const pi_device_binary_property metadataElement = metadata[i];
+    std::string metadataElementName{metadataElement->Name};
+
+    auto [prefix, tag] = splitMetadataName(metadataElementName);
+
+    if (tag == __SYCL_PI_PROGRAM_METADATA_TAG_REQD_WORK_GROUP_SIZE) {
+      // If metadata is reqd_work_group_size, record it for the corresponding
+      // kernel name.
+      size_t MDElemsSize = metadataElement->ValSize - sizeof(std::uint64_t);
+
+      // Expect between 1 and 3 32-bit integer values.
+      assert(MDElemsSize >= sizeof(std::uint32_t) &&
+             MDElemsSize <= sizeof(std::uint32_t) * 3 &&
+             "Unexpected size for reqd_work_group_size metadata");
+
+      // Get pointer to data, skipping 64-bit size at the start of the data.
+      const char *ValuePtr =
+          reinterpret_cast<const char *>(metadataElement->ValAddr) +
+          sizeof(std::uint64_t);
+      // Read values and pad with 1's for values not present.
+      std::uint32_t reqdWorkGroupElements[] = {1, 1, 1};
+      std::memcpy(reqdWorkGroupElements, ValuePtr, MDElemsSize);
+      kernelReqdWorkGroupSizeMD_[prefix] =
+          std::make_tuple(reqdWorkGroupElements[0], reqdWorkGroupElements[1],
+                          reqdWorkGroupElements[2]);
+    } else if (tag == __SYCL_PI_PROGRAM_METADATA_GLOBAL_ID_MAPPING) {
+      const char *metadataValPtr =
+          reinterpret_cast<const char *>(metadataElement->ValAddr) +
+          sizeof(std::uint64_t);
+      const char *metadataValPtrEnd =
+          metadataValPtr + metadataElement->ValSize - sizeof(std::uint64_t);
+      globalIDMD_[prefix] = std::string{metadataValPtr, metadataValPtrEnd};
+    }
+  }
+  return PI_SUCCESS;
+}
+
+pi_result _ur_program_handle_t::set_binary(const char *source, size_t length) {
+  assert((binary_ == nullptr && binarySizeInBytes_ == 0) &&
+         "Re-setting program binary data which has already been set");
+  binary_ = source;
+  binarySizeInBytes_ = length;
+  return PI_SUCCESS;
+}
+
+pi_result _ur_program_handle_t::build_program(const char *build_options) {
+
+  this->buildOptions_ = build_options;
+
+  constexpr const unsigned int numberOfOptions = 4u;
+
+  CUjit_option options[numberOfOptions];
+  void *optionVals[numberOfOptions];
+
+  // Pass a buffer for info messages
+  options[0] = CU_JIT_INFO_LOG_BUFFER;
+  optionVals[0] = (void *)infoLog_;
+  // Pass the size of the info buffer
+  options[1] = CU_JIT_INFO_LOG_BUFFER_SIZE_BYTES;
+  optionVals[1] = (void *)(long)MAX_LOG_SIZE;
+  // Pass a buffer for error message
+  options[2] = CU_JIT_ERROR_LOG_BUFFER;
+  optionVals[2] = (void *)errorLog_;
+  // Pass the size of the error buffer
+  options[3] = CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES;
+  optionVals[3] = (void *)(long)MAX_LOG_SIZE;
+
+  auto result = PI_CHECK_ERROR(
+      cuModuleLoadDataEx(&module_, static_cast<const void *>(binary_),
+                         numberOfOptions, options, optionVals));
+
+  const auto success = (result == ZER_RESULT_SUCCESS);
+
+  buildStatus_ =
+      success ? PI_PROGRAM_BUILD_STATUS_SUCCESS : PI_PROGRAM_BUILD_STATUS_ERROR;
+
+  // If no exception, result is correct
+  return success ? PI_SUCCESS : PI_ERROR_BUILD_PROGRAM_FAILURE;
+}
