@@ -410,14 +410,16 @@ inline pi_result ur2piUSMAllocInfoValue(ur_usm_alloc_info_t ParamName,
 }
 
 // Handle mismatched PI and UR type return sizes for info queries
-inline pi_result fixupInfoValueTypes(size_t ParamValueSizeUR,
+inline pi_result fixupInfoValueTypes(size_t ParamValueSizeRetUR,
                                      size_t *ParamValueSizeRetPI,
-                                     void *ParamValue) {
-  if (ParamValueSizeUR == 1) {
+                                     size_t ParamValueSize, void *ParamValue) {
+  if (ParamValueSizeRetUR == 1 && ParamValueSize == 4) {
     // extend bool to pi_bool (uint32_t)
-    auto *ValIn = static_cast<bool *>(ParamValue);
-    auto *ValOut = static_cast<pi_bool *>(ParamValue);
-    *ValOut = static_cast<pi_bool>(*ValIn);
+    if (ParamValue) {
+      auto *ValIn = static_cast<bool *>(ParamValue);
+      auto *ValOut = static_cast<pi_bool *>(ParamValue);
+      *ValOut = static_cast<pi_bool>(*ValIn);
+    }
     if (ParamValueSizeRetPI) {
       *ParamValueSizeRetPI = sizeof(pi_bool);
     }
@@ -543,13 +545,18 @@ inline pi_result piPlatformGetInfo(pi_platform Platform,
     die("urGetContextInfo: unsuppported ParamName.");
   }
 
-  size_t SizeInOut = ParamValueSize;
+  size_t UrParamValueSizeRet;
   auto UrPlatform = reinterpret_cast<ur_platform_handle_t>(Platform);
-  HANDLE_ERRORS(urPlatformGetInfo(UrPlatform, UrParamName, SizeInOut,
-                                  ParamValue, ParamValueSizeRet));
+  HANDLE_ERRORS(urPlatformGetInfo(UrPlatform, UrParamName, ParamValueSize,
+                                  ParamValue, &UrParamValueSizeRet));
 
-  ur2piPlatformInfoValue(UrParamName, ParamValueSize, &SizeInOut, ParamValue);
-  fixupInfoValueTypes(SizeInOut, ParamValueSizeRet, ParamValue);
+  if (ParamValueSizeRet) {
+    *ParamValueSizeRet = UrParamValueSizeRet;
+  }
+  ur2piPlatformInfoValue(UrParamName, ParamValueSize, &ParamValueSize,
+                         ParamValue);
+  fixupInfoValueTypes(UrParamValueSizeRet, ParamValueSizeRet, ParamValueSize,
+                      ParamValue);
 
   return PI_SUCCESS;
 }
@@ -962,20 +969,28 @@ inline pi_result piDeviceGetInfo(pi_device Device, pi_device_info ParamName,
     InfoType = UR_DEVICE_INFO_BACKEND_RUNTIME_VERSION;
     break;
   }
+  case PI_EXT_CODEPLAY_DEVICE_INFO_MAX_REGISTERS_PER_WORK_GROUP: {
+    InfoType = UR_EXT_DEVICE_INFO_MAX_REGISTERS_PER_WORK_GROUP;
+    break;
+  }
   default:
     return PI_ERROR_UNKNOWN;
   };
 
   PI_ASSERT(Device, PI_ERROR_INVALID_DEVICE);
 
-  size_t SizeInOut = ParamValueSize;
+  size_t UrParamValueSizeRet;
   auto UrDevice = reinterpret_cast<ur_device_handle_t>(Device);
 
-  HANDLE_ERRORS(urDeviceGetInfo(UrDevice, InfoType, SizeInOut, ParamValue,
-                                ParamValueSizeRet));
+  HANDLE_ERRORS(urDeviceGetInfo(UrDevice, InfoType, ParamValueSize, ParamValue,
+                                &UrParamValueSizeRet));
 
-  ur2piDeviceInfoValue(InfoType, ParamValueSize, &SizeInOut, ParamValue);
-  fixupInfoValueTypes(SizeInOut, ParamValueSizeRet, ParamValue);
+  if (ParamValueSizeRet) {
+    *ParamValueSizeRet = UrParamValueSizeRet;
+  }
+  ur2piDeviceInfoValue(InfoType, ParamValueSize, &ParamValueSize, ParamValue);
+  fixupInfoValueTypes(UrParamValueSizeRet, ParamValueSizeRet, ParamValueSize,
+                      ParamValue);
 
   return PI_SUCCESS;
 }
@@ -1238,10 +1253,14 @@ inline pi_result piContextGetInfo(pi_context Context, pi_context_info ParamName,
   }
   }
 
+  size_t UrParamValueSizeRet;
   HANDLE_ERRORS(urContextGetInfo(hContext, ContextInfoType, ParamValueSize,
-                                 ParamValue, ParamValueSizeRet));
-  fixupInfoValueTypes(ParamValueSize, ParamValueSizeRet, ParamValue);
-
+                                 ParamValue, &UrParamValueSizeRet));
+  if (ParamValueSizeRet) {
+    *ParamValueSizeRet = UrParamValueSizeRet;
+  }
+  fixupInfoValueTypes(UrParamValueSizeRet, ParamValueSizeRet, ParamValueSize,
+                      ParamValue);
   return PI_SUCCESS;
 }
 
@@ -3817,12 +3836,15 @@ inline pi_result piSamplerGetInfo(pi_sampler Sampler, pi_sampler_info ParamName,
     return PI_ERROR_UNKNOWN;
   }
 
-  size_t SizeInOut = ParamValueSize;
+  size_t UrParamValueSizeRet;
   auto hSampler = reinterpret_cast<ur_sampler_handle_t>(Sampler);
-  HANDLE_ERRORS(urSamplerGetInfo(hSampler, InfoType, SizeInOut, ParamValue,
-                                 ParamValueSizeRet));
-  fixupInfoValueTypes(SizeInOut, ParamValueSizeRet, ParamValue);
-
+  HANDLE_ERRORS(urSamplerGetInfo(hSampler, InfoType, ParamValueSize, ParamValue,
+                                 &UrParamValueSizeRet));
+  if (ParamValueSizeRet) {
+    *ParamValueSizeRet = UrParamValueSizeRet;
+  }
+  fixupInfoValueTypes(UrParamValueSizeRet, ParamValueSizeRet, ParamValueSize,
+                      ParamValue);
   return PI_SUCCESS;
 }
 
