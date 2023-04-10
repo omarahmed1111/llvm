@@ -2093,9 +2093,10 @@ inline pi_result piKernelGetGroupInfo(pi_kernel Kernel, pi_device Device,
   }
   // The number of registers used by the compiled kernel (device specific)
   case PI_KERNEL_GROUP_INFO_NUM_REGS: {
-    die("PI_KERNEL_GROUP_INFO_NUM_REGS in piKernelGetGroupInfo not "
-        "implemented\n");
-    break;
+    HANDLE_ERRORS(urKernelGetInfo(UrKernel, UR_KERNEL_INFO_NUM_REGS,
+                                  ParamValueSize, ParamValue,
+                                  ParamValueSizeRet));
+    return PI_SUCCESS;
   }
   default: {
     die("Unknown ParamName in piKernelGetGroupInfo");
