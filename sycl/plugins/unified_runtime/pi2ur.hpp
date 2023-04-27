@@ -2348,6 +2348,7 @@ inline pi_result piMemBufferCreate(pi_context Context, pi_mem_flags Flags,
   }
 
   ur_buffer_properties_t UrProps{};
+  UrProps.stype = UR_STRUCTURE_TYPE_BUFFER_PROPERTIES;
   UrProps.pHost = HostPtr;
   ur_mem_handle_t *UrBuffer = reinterpret_cast<ur_mem_handle_t *>(RetMem);
   HANDLE_ERRORS(
@@ -2532,6 +2533,7 @@ static void pi2urImageDesc(const pi_image_format *ImageFormat,
   }
   }
 
+  UrDesc->stype = UR_STRUCTURE_TYPE_IMAGE_DESC;
   UrDesc->arraySize = ImageDesc->image_array_size;
   UrDesc->depth = ImageDesc->image_depth;
   UrDesc->height = ImageDesc->image_height;
