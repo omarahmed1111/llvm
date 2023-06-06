@@ -693,7 +693,7 @@ UR_APIEXPORT ur_result_t UR_APICALL urDeviceGetInfo(ur_device_handle_t device,
     //
     // query if/how the device can access page-locked host memory, possibly
     // through PCIe, using the same pointer as the host
-    uint64_t value = {};
+    uint32_t value = {};
     if (getAttribute(device, CU_DEVICE_ATTRIBUTE_UNIFIED_ADDRESSING)) {
       // the device shares a unified address space with the host
       if (getAttribute(device, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR) >=
@@ -720,7 +720,7 @@ UR_APIEXPORT ur_result_t UR_APICALL urDeviceGetInfo(ur_device_handle_t device,
     // associated with this device."
     //
     // query how the device can access memory allocated on the device itself (?)
-    uint64_t value =
+    uint32_t value =
         UR_DEVICE_USM_ACCESS_CAPABILITY_FLAG_ACCESS |
         UR_DEVICE_USM_ACCESS_CAPABILITY_FLAG_ATOMIC_ACCESS |
         UR_DEVICE_USM_ACCESS_CAPABILITY_FLAG_CONCURRENT_ACCESS |
@@ -733,7 +733,7 @@ UR_APIEXPORT ur_result_t UR_APICALL urDeviceGetInfo(ur_device_handle_t device,
     // allocation associated with this device."
     //
     // query if/how the device can access managed memory associated to it
-    uint64_t value = {};
+    uint32_t value = {};
     if (getAttribute(device, CU_DEVICE_ATTRIBUTE_MANAGED_MEMORY)) {
       // the device can allocate managed memory on this system
       value = UR_DEVICE_USM_ACCESS_CAPABILITY_FLAG_ACCESS |
@@ -761,7 +761,7 @@ UR_APIEXPORT ur_result_t UR_APICALL urDeviceGetInfo(ur_device_handle_t device,
     //
     // query if/how the device can access managed memory associated to other
     // devices
-    uint64_t value = {};
+    uint32_t value = {};
     if (getAttribute(device, CU_DEVICE_ATTRIBUTE_MANAGED_MEMORY)) {
       // the device can allocate managed memory on this system
       value |= UR_DEVICE_USM_ACCESS_CAPABILITY_FLAG_ACCESS;
@@ -790,7 +790,7 @@ UR_APIEXPORT ur_result_t UR_APICALL urDeviceGetInfo(ur_device_handle_t device,
     //
     // query if/how the device can access pageable host memory allocated by the
     // system allocator
-    uint64_t value = {};
+    uint32_t value = {};
     if (getAttribute(device, CU_DEVICE_ATTRIBUTE_PAGEABLE_MEMORY_ACCESS)) {
       // the device suppports coherently accessing pageable memory without
       // calling cuMemHostRegister/cudaHostRegister on it
