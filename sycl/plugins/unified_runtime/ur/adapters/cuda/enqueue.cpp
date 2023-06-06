@@ -127,7 +127,7 @@ ur_result_t setCuMemAdvise(CUdeviceptr devPtr, size_t size,
 // The default threadsPerBlock only require handling the first work_dim
 // dimension.
 void guessLocalWorkSize(ur_device_handle_t device, size_t *threadsPerBlock,
-                        const size_t *global_work_size,
+                        const size_t *global_work_size, const uint32_t work_dim,
                         const size_t maxThreadsPerBlock[3],
                         ur_kernel_handle_t kernel, uint32_t local_size) {
   assert(threadsPerBlock != nullptr);
@@ -135,13 +135,20 @@ void guessLocalWorkSize(ur_device_handle_t device, size_t *threadsPerBlock,
   assert(kernel != nullptr);
   int minGrid, maxBlockSize, gridDim[3];
 
+  // The below assumes a three dimensional range but this is not guaranteed by
+  // UR.
+  size_t global_size_normalized[3] = {1, 1, 1};
+  for (uint32_t i = 0; i < work_dim; i++) {
+    global_size_normalized[i] = global_work_size[i];
+  }
+
   cuDeviceGetAttribute(&gridDim[1], CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_Y,
                        device->get());
   cuDeviceGetAttribute(&gridDim[2], CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_Z,
                        device->get());
 
-  threadsPerBlock[1] = ((global_work_size[1] - 1) / gridDim[1]) + 1;
-  threadsPerBlock[2] = ((global_work_size[2] - 1) / gridDim[2]) + 1;
+  threadsPerBlock[1] = ((global_size_normalized[1] - 1) / gridDim[1]) + 1;
+  threadsPerBlock[2] = ((global_size_normalized[2] - 1) / gridDim[2]) + 1;
 
   UR_CHECK_ERROR(cuOccupancyMaxPotentialBlockSize(
       &minGrid, &maxBlockSize, kernel->get(), NULL, local_size,
@@ -149,13 +156,13 @@ void guessLocalWorkSize(ur_device_handle_t device, size_t *threadsPerBlock,
 
   gridDim[0] = maxBlockSize / (threadsPerBlock[1] * threadsPerBlock[2]);
 
-  threadsPerBlock[0] =
-      std::min(maxThreadsPerBlock[0],
-               std::min(global_work_size[0], static_cast<size_t>(gridDim[0])));
+  threadsPerBlock[0] = std::min(
+      maxThreadsPerBlock[0],
+      std::min(global_size_normalized[0], static_cast<size_t>(gridDim[0])));
 
   // Find a local work group size that is a divisor of the global
   // work group size to produce uniform work groups.
-  while (0u != (global_work_size[0] % threadsPerBlock[0])) {
+  while (0u != (global_size_normalized[0] % threadsPerBlock[0])) {
     --threadsPerBlock[0];
   }
 }
@@ -177,7 +184,7 @@ bool hasExceededMaxRegistersPerBlock(ur_device_handle_t device,
                                     kernel->get()));
 
   return blockSize * regsPerThread > size_t(maxRegsPerBlock);
-};
+}
 
 /// Enqueues a wait on the given CUstream for all specified events (See
 /// \ref enqueueEventWaitWithBarrier.) If the events list is empty, the enqueued
@@ -277,7 +284,6 @@ UR_DLLEXPORT ur_result_t UR_APICALL urEnqueueKernelLaunch(
     const size_t *pGlobalWorkOffset, const size_t *pGlobalWorkSize,
     const size_t *pLocalWorkSize, uint32_t numEventsInWaitList,
     const ur_event_handle_t *phEventWaitList, ur_event_handle_t *phEvent) {
-
   // Preconditions
   UR_ASSERT(hQueue, UR_RESULT_ERROR_INVALID_NULL_HANDLE);
   UR_ASSERT(hQueue->get_context() == hKernel->get_context(),
@@ -344,7 +350,7 @@ UR_DLLEXPORT ur_result_t UR_APICALL urEnqueueKernelLaunch(
         }
       } else {
         guessLocalWorkSize(hQueue->device_, threadsPerBlock, pGlobalWorkSize,
-                           maxThreadsPerBlock, hKernel, local_size);
+                           workDim, maxThreadsPerBlock, hKernel, local_size);
       }
     }
 
