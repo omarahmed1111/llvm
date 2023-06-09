@@ -7,6 +7,8 @@
 //===-----------------------------------------------------------------===//
 #pragma once
 
+#include <unordered_map>
+
 #include "common.hpp"
 #include "device.hpp"
 #include "platform.hpp"
@@ -100,9 +102,47 @@ struct ur_context_handle_t_ {
 
   uint32_t get_reference_count() const noexcept { return refCount_; }
 
+  /// We need to keep track of USM mappings in AMD HIP, as certain extra
+  /// synchronization *is* actually required for correctness.
+  /// During kernel enqueue we must dispatch a prefetch for each kernel argument
+  /// that points to a USM mapping to ensure the mapping is correctly
+  /// populated on the device (https://github.com/intel/llvm/issues/7252). Thus,
+  /// we keep track of mappings in the context, and then check against them just
+  /// before the kernel is launched. The stream against which the kernel is
+  /// launched is not known until enqueue time, but the USM mappings can happen
+  /// at any time. Thus, they are tracked on the context used for the urUSM*
+  /// mapping.
+  ///
+  /// The three utility function are simple wrappers around a mapping from a
+  /// pointer to a size.
+  void add_usm_mapping(void *ptr, size_t size) {
+    std::lock_guard<std::mutex> guard(mutex_);
+    assert(usm_mappings_.find(ptr) == usm_mappings_.end() &&
+           "mapping already exists");
+    usm_mappings_[ptr] = size;
+  }
+
+  void remove_usm_mapping(const void *ptr) {
+    std::lock_guard<std::mutex> guard(mutex_);
+    auto it = std::find_if(
+        usm_mappings_.begin(), usm_mappings_.end(),
+        [ptr](std::pair<const void *, size_t> val) { return val.first = ptr; });
+    if (it != usm_mappings_.end())
+      usm_mappings_.erase(it);
+  }
+
+  std::pair<const void *, size_t> get_usm_mapping(const void *p) {
+    std::lock_guard<std::mutex> guard(mutex_);
+    auto it = usm_mappings_.find(p);
+    if (it == usm_mappings_.end())
+      return {nullptr, 0};
+    return *it;
+  }
+
 private:
   std::mutex mutex_;
   std::vector<deleter_data> extended_deleters_;
+  std::unordered_map<const void *, size_t> usm_mappings_;
 };
 
 namespace {

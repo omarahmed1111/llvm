@@ -12,6 +12,7 @@
 #include <atomic>
 #include <cassert>
 #include <numeric>
+#include <set>
 
 #include "program.hpp"
 
@@ -57,6 +58,7 @@ struct ur_kernel_handle_t_ {
     args_size_t paramSizes_;
     args_index_t indices_;
     args_size_t offsetPerIndex_;
+    std::set<const void *> ptrArgVals_;
 
     std::uint32_t implicitOffsetArgs_[3] = {0, 0, 0};
 
@@ -171,6 +173,19 @@ struct ur_kernel_handle_t_ {
   /// real one required by the kernel, since this cannot be queried from
   /// the HIP Driver API
   uint32_t get_num_args() const noexcept { return args_.indices_.size() - 1; }
+
+  /// We track all pointer arguments to be able to issue prefetches at enqueue
+  /// time
+  void set_kernel_ptr_arg(int index, size_t size, const void *ptr_arg) {
+    args_.ptrArgVals_.insert(*static_cast<void *const *>(ptr_arg));
+    set_kernel_arg(index, size, ptr_arg);
+  }
+
+  bool is_ptr_arg(const void *ptr) {
+    return args_.ptrArgVals_.find(ptr) != args_.ptrArgVals_.end();
+  }
+
+  std::set<const void *> &get_ptr_args() { return args_.ptrArgVals_; }
 
   void set_kernel_arg(int index, size_t size, const void *arg) {
     args_.add_arg(index, size, arg);

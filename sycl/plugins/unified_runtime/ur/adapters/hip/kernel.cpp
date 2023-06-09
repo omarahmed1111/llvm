@@ -276,7 +276,7 @@ urKernelGetSubGroupInfo(ur_kernel_handle_t hKernel, ur_device_handle_t hDevice,
 
 UR_APIEXPORT ur_result_t UR_APICALL urKernelSetArgPointer(
     ur_kernel_handle_t hKernel, uint32_t argIndex, const void *pArgValue) {
-  hKernel->set_kernel_arg(argIndex, sizeof(pArgValue), pArgValue);
+  hKernel->set_kernel_ptr_arg(argIndex, sizeof(pArgValue), pArgValue);
   return UR_RESULT_SUCCESS;
 }
 

@@ -29,22 +29,22 @@ urUSMHostAlloc(ur_context_handle_t hContext, const ur_usm_desc_t *pUSMDesc,
             UR_RESULT_ERROR_INVALID_DEVICE);
   UR_ASSERT(size > 0 && size <= device_max_mem_alloc_size,
             UR_RESULT_ERROR_INVALID_USM_SIZE);
+  UR_ASSERT(!pUSMDesc || (pUSMDesc->align == 0 ||
+                          ((pUSMDesc->align & (pUSMDesc->align - 1)) == 0)),
+            UR_RESULT_ERROR_INVALID_VALUE);
 
   ur_result_t result = UR_RESULT_SUCCESS;
   try {
     ScopedContext active(hContext);
     result = UR_CHECK_ERROR(hipHostMalloc(ppMem, size));
   } catch (ur_result_t error) {
-    result = error;
+    return error;
   }
-
-  UR_ASSERT(!pUSMDesc || (pUSMDesc->align == 0 ||
-                          ((pUSMDesc->align & (pUSMDesc->align - 1)) == 0)),
-            UR_RESULT_ERROR_INVALID_VALUE);
 
   assert(result == UR_RESULT_SUCCESS &&
          (!pUSMDesc || pUSMDesc->align == 0 ||
           reinterpret_cast<std::uintptr_t>(*ppMem) % pUSMDesc->align == 0));
+  hContext->add_usm_mapping(*ppMem, size);
 
   return result;
 }
@@ -67,22 +67,23 @@ urUSMDeviceAlloc(ur_context_handle_t hContext, ur_device_handle_t hDevice,
             UR_RESULT_ERROR_INVALID_DEVICE);
   UR_ASSERT(size > 0 && size <= device_max_mem_alloc_size,
             UR_RESULT_ERROR_INVALID_USM_SIZE);
+  UR_ASSERT(!pUSMDesc || (pUSMDesc->align == 0 ||
+                          ((pUSMDesc->align & (pUSMDesc->align - 1)) == 0)),
+            UR_RESULT_ERROR_INVALID_VALUE);
 
   ur_result_t result = UR_RESULT_SUCCESS;
   try {
     ScopedContext active(hContext);
     result = UR_CHECK_ERROR(hipMalloc(ppMem, size));
   } catch (ur_result_t error) {
-    result = error;
+    return error;
   }
-  UR_ASSERT(!pUSMDesc || (pUSMDesc->align == 0 ||
-                          ((pUSMDesc->align & (pUSMDesc->align - 1)) == 0)),
-            UR_RESULT_ERROR_INVALID_VALUE);
 
   assert(result == UR_RESULT_SUCCESS &&
          (!pUSMDesc || pUSMDesc->align == 0 ||
           reinterpret_cast<std::uintptr_t>(*ppMem) % pUSMDesc->align == 0));
 
+  hContext->add_usm_mapping(*ppMem, size);
   return result;
 }
 
@@ -104,22 +105,23 @@ urUSMSharedAlloc(ur_context_handle_t hContext, ur_device_handle_t hDevice,
             UR_RESULT_ERROR_INVALID_DEVICE);
   UR_ASSERT(size > 0 && size <= device_max_mem_alloc_size,
             UR_RESULT_ERROR_INVALID_USM_SIZE);
+  UR_ASSERT(!pUSMDesc || (pUSMDesc->align == 0 ||
+                          ((pUSMDesc->align & (pUSMDesc->align - 1)) == 0)),
+            UR_RESULT_ERROR_INVALID_VALUE);
 
   ur_result_t result = UR_RESULT_SUCCESS;
   try {
     ScopedContext active(hContext);
     result = UR_CHECK_ERROR(hipMallocManaged(ppMem, size, hipMemAttachGlobal));
   } catch (ur_result_t error) {
-    result = error;
+    return error;
   }
-  UR_ASSERT(!pUSMDesc || (pUSMDesc->align == 0 ||
-                          ((pUSMDesc->align & (pUSMDesc->align - 1)) == 0)),
-            UR_RESULT_ERROR_INVALID_VALUE);
 
   assert(result == UR_RESULT_SUCCESS &&
          (!pUSMDesc || pUSMDesc->align == 0 ||
           reinterpret_cast<std::uintptr_t>(*ppMem) % pUSMDesc->align == 0));
 
+  hContext->add_usm_mapping(*ppMem, size);
   return result;
 }
 
@@ -146,8 +148,9 @@ UR_APIEXPORT ur_result_t UR_APICALL urUSMFree(ur_context_handle_t hContext,
       result = UR_CHECK_ERROR(hipFreeHost(pMem));
     }
   } catch (ur_result_t error) {
-    result = error;
+    return error;
   }
+  hContext->remove_usm_mapping(pMem);
   return result;
 }
 
