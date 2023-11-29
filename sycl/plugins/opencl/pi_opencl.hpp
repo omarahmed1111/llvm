@@ -21,6 +21,9 @@
 #include <regex>
 #include <string>
 
+#include <adapters/opencl/device.hpp>
+#include <adapters/opencl/platform.hpp>
+
 // Share code between the PI Plugin and UR Adapter
 #include <pi2ur.hpp>
 
@@ -30,5 +33,13 @@
 
 #define _PI_OPENCL_PLUGIN_VERSION_STRING                                       \
   _PI_PLUGIN_VERSION_STRING(_PI_OPENCL_PLUGIN_VERSION)
+
+struct _pi_platform : ur_platform_handle_t_ {
+  using ur_platform_handle_t_::ur_platform_handle_t_;
+};
+
+struct _pi_device : ur_device_handle_t_ {
+  using ur_device_handle_t_::ur_device_handle_t_;
+};
 
 #endif // PI_OPENCL_HPP

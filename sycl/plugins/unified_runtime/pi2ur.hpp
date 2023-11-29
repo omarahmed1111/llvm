@@ -884,7 +884,7 @@ inline pi_result piPlatformGetInfo(pi_platform Platform,
     break;
   }
   default:
-    die("urGetContextInfo: unsuppported ParamName.");
+    die("urGetPlatformInfo: unsuppported ParamName.");
   }
 
   size_t UrParamValueSizeRet;
