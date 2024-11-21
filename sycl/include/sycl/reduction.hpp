@@ -2743,6 +2743,33 @@ void reduction_parallel_for(handler &CGH, range<Dims> Range,
   // for the device.
   size_t PrefWGSize = reduGetPreferredWGSize(CGH.MQueue, OneElemSize);
 
+  auto SyclQueue = createSyclObjFromImpl<queue>(CGH.MQueue);
+  auto Ctx = SyclQueue.get_context();
+  auto Dev = SyclQueue.get_device();
+
+  constexpr bool IsUndefinedKernelName{std::is_same_v<KernelName, auto_name>};
+  if (IsUndefinedKernelName) {
+    std::vector<kernel_id> ReductionKernelIDs = get_kernel_ids();
+    for (auto KernelID : ReductionKernelIDs) {
+      std::string ReduKernelName = KernelID.get_name();
+      if (ReduKernelName.find("reduction") != std::string::npos) {
+        auto KB = get_kernel_bundle<bundle_state::executable>(Ctx, {KernelID});
+        kernel krn = KB.get_kernel(KernelID);
+        using namespace info::kernel_device_specific;
+        size_t MaxSize = krn.template get_info<work_group_size>(Dev);
+        PrefWGSize = std::min(PrefWGSize, MaxSize);
+      }
+    }
+    std::cout << "workgroup size2: " << PrefWGSize << "\n\n\n\n";
+  } else {
+    using namespace info::kernel_device_specific;
+    auto ExecBundle = get_kernel_bundle<KernelName, bundle_state::executable>(Ctx, {Dev});
+    kernel Kernel = ExecBundle.template get_kernel<KernelName>();
+    size_t MaxSize = Kernel.template get_info<work_group_size>(Dev);
+    PrefWGSize = std::min(PrefWGSize, MaxSize);
+    std::cout << "workgroup size1: " << PrefWGSize << "\n\n\n\n";
+  }
+
   size_t NWorkItems = Range.size();
   size_t WGSize = std::min(NWorkItems, PrefWGSize);
   size_t NWorkGroups = NWorkItems / WGSize;
