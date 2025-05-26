@@ -7,8 +7,13 @@
 //===----------------------------------------------------------------------===//
 
 #pragma once
-#include <sycl/ext/oneapi/properties/property.hpp>
 
+#ifdef __INTEL_PREVIEW_BREAKING_CHANGES
+#include <sycl/ext/oneapi/properties/property.hpp>
+#else
+#include <cstddef>
+#include <sycl/properties/property_traits.hpp>
+#endif
 namespace sycl {
 inline namespace _V1 {
 namespace ext::oneapi::experimental {
@@ -16,7 +21,12 @@ namespace ext::oneapi::experimental {
 // Forward declare memory_pool.
 class memory_pool;
 
+#ifndef __INTEL_PREVIEW_BREAKING_CHANGES
+namespace property::memory_pool {
+#endif
+
 // Property that determines the initial threshold of a memory pool.
+#ifdef __INTEL_PREVIEW_BREAKING_CHANGES
 struct initial_threshold
     : detail::run_time_property_key<initial_threshold,
                                     detail::PropKind::InitialThreshold> {
@@ -95,6 +105,62 @@ struct is_property_key_of<read_only, memory_pool> : std::true_type {};
 
 template <>
 struct is_property_key_of<zero_init, memory_pool> : std::true_type {};
+#else
+// Property that determines the initial threshold of a memory pool.
+struct initial_threshold : public sycl::detail::PropertyWithData<
+                               sycl::detail::MemPoolInitialThreshold> {
+  initial_threshold(size_t initialThreshold)
+      : initialThreshold(initialThreshold) {};
+  size_t get_initial_threshold() { return initialThreshold; }
+
+private:
+  size_t initialThreshold;
+};
+
+// Property that determines the maximum size of a memory pool.
+struct maximum_size
+    : public sycl::detail::PropertyWithData<sycl::detail::MemPoolMaximumSize> {
+  maximum_size(size_t maxSize) : maxSize(maxSize) {};
+  size_t get_maximum_size() { return maxSize; }
+
+private:
+  size_t maxSize;
+};
+
+// Property that provides a performance hint that all allocations from this pool
+// will only be read from within SYCL kernel functions.
+struct read_only
+    : public sycl::detail::DataLessProperty<sycl::detail::MemPoolReadOnly> {
+  read_only() = default;
+};
+
+struct zero_init
+    : public sycl::detail::DataLessProperty<sycl::detail::MemPoolZeroInit> {
+  zero_init() = default;
+};
+
+} // namespace property::memory_pool
+
+template <>
+struct is_property<
+    sycl::ext::oneapi::experimental::property::memory_pool::initial_threshold>
+    : std::true_type {};
+
+template <>
+struct is_property<
+    sycl::ext::oneapi::experimental::property::memory_pool::maximum_size>
+    : std::true_type {};
+
+template <>
+struct is_property<
+    sycl::ext::oneapi::experimental::property::memory_pool::read_only>
+    : std::true_type {};
+
+template <>
+struct is_property<
+    sycl::ext::oneapi::experimental::property::memory_pool::zero_init>
+    : std::true_type {};
+#endif
 
 } // namespace ext::oneapi::experimental
 } // namespace _V1

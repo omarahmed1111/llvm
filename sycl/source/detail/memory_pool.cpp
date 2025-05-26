@@ -27,11 +27,16 @@ __SYCL_EXPORT size_t memory_pool::get_threshold() const {
   return impl->get_threshold();
 }
 
+#ifdef __INTEL_PREVIEW_BREAKING_CHANGES
 const std::pair<std::tuple<bool, bool, bool, bool>,
                 std::tuple<size_t, size_t, bool, bool>> &
 memory_pool::getPropsTuple() const {
   return impl->getPropsTuple();
 }
+#else
+const property_list &memory_pool::getPropList() const {
+  return impl->getPropList();
+#endif
 
 __SYCL_EXPORT size_t memory_pool::get_reserved_size_current() const {
   return impl->get_reserved_size_current();
@@ -47,10 +52,17 @@ __SYCL_EXPORT void memory_pool::increase_threshold_to(size_t newThreshold) {
     impl->set_new_threshold(newThreshold);
 }
 
+#ifdef __INTEL_PREVIEW_BREAKING_CHANGES
 __SYCL_EXPORT memory_pool::memory_pool(
     const sycl::context &ctx, const sycl::device &dev, sycl::usm::alloc kind,
     const std::pair<std::tuple<bool, bool, bool, bool>,
                     std::tuple<size_t, size_t, bool, bool>> &props) {
+#else
+__SYCL_EXPORT memory_pool::memory_pool(const sycl::context &ctx,
+                                       const sycl::device &dev,
+                                       sycl::usm::alloc kind,
+                                       const property_list &props) {
+#endif
 
   if (kind == sycl::usm::alloc::host)
     throw sycl::exception(

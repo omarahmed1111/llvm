@@ -19,6 +19,7 @@ namespace detail {
 
 class memory_pool_impl {
 public:
+#ifdef __INTEL_PREVIEW_BREAKING_CHANGES
   memory_pool_impl(
       const sycl::context &ctx, const sycl::device &dev,
       const sycl::usm::alloc kind,
@@ -30,7 +31,13 @@ public:
       const bool isDefaultPool,
       const std::pair<std::tuple<bool, bool, bool, bool>,
                       std::tuple<size_t, size_t, bool, bool>> &props);
-
+#else
+  memory_pool_impl(const sycl::context &ctx, const sycl::device &dev,
+                   const sycl::usm::alloc kind, const property_list &props);
+  memory_pool_impl(const sycl::context &ctx, const sycl::device &dev,
+                   const sycl::usm::alloc kind, ur_usm_pool_handle_t poolHandle,
+                   const bool isDefaultPool, const property_list &props);
+#endif
   ~memory_pool_impl();
 
   memory_pool_impl(const memory_pool_impl &) = delete;
@@ -42,12 +49,15 @@ public:
     return sycl::detail::createSyclObjFromImpl<sycl::context>(MContextImplPtr);
   }
   sycl::usm::alloc get_alloc_kind() const { return MKind; }
+#ifdef __INTEL_PREVIEW_BREAKING_CHANGES
   const std::pair<std::tuple<bool, bool, bool, bool>,
                   std::tuple<size_t, size_t, bool, bool>> &
   getPropsTuple() const {
     return MPropsTuple;
   }
-
+#else
+  const property_list &getPropList() const { return MPropList; }
+#endif
   // Returns backend specific values.
   size_t get_allocation_chunk_size() const;
   size_t get_threshold() const;
@@ -66,9 +76,13 @@ private:
   sycl::usm::alloc MKind;
   ur_usm_pool_handle_t MPoolHandle{0};
   bool MIsDefaultPool = false;
+#ifdef __INTEL_PREVIEW_BREAKING_CHANGES
   std::pair<std::tuple<bool, bool, bool, bool>,
             std::tuple<size_t, size_t, bool, bool>>
       MPropsTuple;
+#else
+  property_list MPropList;
+#endif
 };
 
 } // namespace detail

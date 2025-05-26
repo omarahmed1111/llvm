@@ -51,8 +51,14 @@ enum DataLessPropKind {
   GraphDependOnAllLeaves = 24,
   GraphUpdatable = 25,
   GraphEnableProfiling = 26,
+#ifndef __INTEL_PREVIEW_BREAKING_CHANGES
+  MemPoolReadOnly = 27,
+  MemPoolZeroInit = 28,
   // Indicates the last known dataless property.
+  LastKnownDataLessPropKind = 28,
+#else
   LastKnownDataLessPropKind = 26,
+#endif
   // Exceeding 32 may cause ABI breaking change on some of OSes.
   DataLessPropKindSize = 32
 };
@@ -67,7 +73,13 @@ enum PropWithDataKind {
   AccPropBufferLocation = 5,
   QueueComputeIndex = 6,
   GraphNodeDependencies = 7,
+#ifndef __INTEL_PREVIEW_BREAKING_CHANGES
+  MemPoolInitialThreshold = 8,
+  MemPoolMaximumSize = 9,
+  PropWithDataKindSize = 10
+#else
   PropWithDataKindSize = 8
+#endif
 };
 
 // Base class for dataless properties, needed to check that the type of an

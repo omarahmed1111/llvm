@@ -27,10 +27,15 @@ class __SYCL_EXPORT memory_pool {
 
 public:
   // NOT SUPPORTED: Host side pools unsupported.
+#ifdef __INTEL_PREVIEW_BREAKING_CHANGES
   template <typename Properties = empty_properties_t,
             typename = std::enable_if_t<
                 detail::all_are_properties_of_v<memory_pool, Properties>>>
   memory_pool(const sycl::context &, sycl::usm::alloc kind, Properties = {}) {
+#else 
+  memory_pool(const sycl::context &, sycl::usm::alloc kind,
+            const property_list & = {}) {
+#endif
     if (kind == sycl::usm::alloc::device || kind == sycl::usm::alloc::shared)
       throw sycl::exception(sycl::make_error_code(sycl::errc::invalid),
                             "Device and shared allocation kinds are disallowed "
@@ -44,6 +49,7 @@ public:
         "Host allocated pools are unsupported!");
   }
 
+#ifdef __INTEL_PREVIEW_BREAKING_CHANGES
   template <typename Properties = empty_properties_t,
             typename = std::enable_if_t<
                 detail::all_are_properties_of_v<memory_pool, Properties>>>
@@ -57,17 +63,29 @@ public:
   memory_pool(const sycl::queue &q, sycl::usm::alloc kind,
               Properties props = {})
       : memory_pool(q.get_context(), q.get_device(), kind, props) {}
+#else
+  memory_pool(const sycl::context &ctx, const sycl::device &dev,
+              sycl::usm::alloc kind, const property_list &props = {});
 
+  memory_pool(const sycl::queue &q, sycl::usm::alloc kind,
+              const property_list &props = {})
+      : memory_pool(q.get_context(), q.get_device(), kind, props) {}
+#endif
+
+#ifdef __INTEL_PREVIEW_BREAKING_CHANGES
   // NOT SUPPORTED: Creating a pool from an existing allocation is unsupported.
   template <typename Properties = empty_properties_t,
             typename = std::enable_if_t<
                 detail::all_are_properties_of_v<memory_pool, Properties>>>
   memory_pool(const sycl::context &, void *, size_t, Properties = {}) {
+#else
+  memory_pool(const sycl::context &, void *, size_t,
+              const property_list & = {}) {
+#endif
     throw sycl::exception(
-        sycl::make_error_code(sycl::errc::feature_not_supported),
-        "Creating a pool from an existing allocation is unsupported!");
+          sycl::make_error_code(sycl::errc::feature_not_supported),
+          "Creating a pool from an existing allocation is unsupported!");
   }
-
   ~memory_pool() = default;
 
   // Copy constructible/assignable, move constructible/assignable.
@@ -91,6 +109,7 @@ public:
   void increase_threshold_to(size_t newThreshold);
 
   // Property getters.
+#ifdef __INTEL_PREVIEW_BREAKING_CHANGES
   template <typename PropertyT> bool has_property() const noexcept {
     const auto tuple = getPropsTuple();
     if constexpr (std::is_same_v<PropertyT, initial_threshold>) {
@@ -125,16 +144,27 @@ public:
       return zero_init();
     }
   }
+#else
+  template <typename PropertyT> bool has_property() const noexcept {
+    return getPropList().template has_property<PropertyT>();
+  }
+
+  template <typename PropertyT> PropertyT get_property() const {
+    return getPropList().template get_property<PropertyT>();
+  }
+#endif
 
 protected:
   std::shared_ptr<detail::memory_pool_impl> impl;
 
   memory_pool(std::shared_ptr<detail::memory_pool_impl> Impl) : impl(Impl) {}
 
+#ifdef __INTEL_PREVIEW_BREAKING_CHANGES
   memory_pool(const sycl::context &ctx, const sycl::device &dev,
               const sycl::usm::alloc kind,
               const std::pair<std::tuple<bool, bool, bool, bool>,
                               std::tuple<size_t, size_t, bool, bool>> &props);
+#endif
   template <class Obj>
   friend const decltype(Obj::impl) &
   sycl::detail::getSyclObjImpl(const Obj &SyclObject);
@@ -146,6 +176,7 @@ protected:
   friend T sycl::detail::createSyclObjFromImpl(
       std::add_lvalue_reference_t<const decltype(T::impl)> ImplObj);
 
+#ifdef __INTEL_PREVIEW_BREAKING_CHANGES
   const std::pair<std::tuple<bool, bool, bool, bool>,
                   std::tuple<size_t, size_t, bool, bool>> &
   getPropsTuple() const;
@@ -187,6 +218,9 @@ protected:
     tuple.second = {initialThresholdVal, maximumSizeVal, readOnly, zeroInit};
     return tuple;
   }
+#else
+  const property_list &getPropList() const;
+#endif
 };
 
 } // namespace ext::oneapi::experimental

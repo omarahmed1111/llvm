@@ -601,9 +601,12 @@ context_impl::get_default_memory_pool(const context &Context,
       sycl::ext::oneapi::experimental::detail::memory_pool_impl>(
       Context, Device, sycl::usm::alloc::device, PoolHandle,
       true /*Default pool*/,
+#ifdef __INTEL_PREVIEW_BREAKING_CHANGES
       std::pair<std::tuple<bool, bool, bool, bool>,
                 std::tuple<size_t, size_t, bool, bool>>() /*Empty Properties*/);
-
+#else
+      property_list{}};
+#endif
   // Hold onto a weak_ptr of the memory_pool_impl. Prevents circular
   // dependencies between the context_impl and memory_pool_impl.
   MMemPoolImplPtrs.push_back(std::pair(Device, MemPoolImplPtr));

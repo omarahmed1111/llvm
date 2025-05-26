@@ -31,9 +31,13 @@ int main() {
   try {
 
     // Create pool with zero_init property
+#ifdef __INTEL_PREVIEW_BREAKING_CHANGES
     syclexp::properties PoolProps{syclexp::zero_init{}};
     syclexp::memory_pool MemPool(Ctx, Dev, sycl::usm::alloc::device, PoolProps);
-
+#else
+    syclexp::property::memory_pool::zero_init ZeroInit;
+    syclexp::memory_pool MemPool(Ctx, Dev, sycl::usm::alloc::device, ZeroInit);
+#endif
     // <--- First allocation, use, and free --->
 
     // Allocate in pool

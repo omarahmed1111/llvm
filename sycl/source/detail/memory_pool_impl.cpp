@@ -58,6 +58,7 @@ void destroy_memory_pool(const sycl::context &ctx, const sycl::device &dev,
 } // namespace
 
 // <--- Memory pool impl --->
+#ifdef __INTEL_PREVIEW_BREAKING_CHANGES
 memory_pool_impl::memory_pool_impl(
     const sycl::context &ctx, const sycl::device &dev,
     const sycl::usm::alloc kind,
@@ -86,7 +87,52 @@ memory_pool_impl::memory_pool_impl(
     : MContextImplPtr(sycl::detail::getSyclObjImpl(ctx)), MDevice(dev),
       MKind(kind), MPoolHandle(poolHandle), MIsDefaultPool(isDefaultPool),
       MPropsTuple(props) {}
+#else
+memory_pool_impl::memory_pool_impl(const sycl::context &ctx,
+                                   const sycl::device &dev,
+                                   const sycl::usm::alloc kind,
+                                   const property_list &props)
+  : MContextImplPtr(sycl::detail::getSyclObjImpl(ctx)), MDevice(dev),
+      MKind(kind), MPropList(props) {
+  size_t maxSize = 0;
+  size_t threshold = 0;
+  bool readOnly = false;
+  bool zeroInit = false;
 
+  // Get properties.
+  if (props.has_property<property::memory_pool::maximum_size>())
+    maxSize = props.get_property<property::memory_pool::maximum_size>()
+                  .get_maximum_size();
+
+  if (props.has_property<property::memory_pool::initial_threshold>())
+    threshold = props.get_property<property::memory_pool::initial_threshold>()
+                    .get_initial_threshold();
+
+  if (props.has_property<property::memory_pool::read_only>())
+    readOnly = true;
+
+  if (props.has_property<property::memory_pool::zero_init>())
+    zeroInit = true;
+
+  if (kind == sycl::usm::alloc::device)
+    MPoolHandle = create_memory_pool_device(ctx, dev, threshold, maxSize,
+                                            readOnly, zeroInit);
+  else
+    throw sycl::exception(
+        sycl::make_error_code(sycl::errc::feature_not_supported),
+        "Only device allocated memory pools are supported!");
+}
+
+memory_pool_impl::memory_pool_impl(const sycl::context &ctx,
+                                   const sycl::device &dev,
+                                   const sycl::usm::alloc kind,
+                                   ur_usm_pool_handle_t poolHandle,
+                                   const bool isDefaultPool,
+                                   const property_list &props)
+  : MContextImplPtr(sycl::detail::getSyclObjImpl(ctx)), MDevice(dev),
+      MKind(kind), MPoolHandle(poolHandle), MIsDefaultPool(isDefaultPool),
+      MPropList(props) {}
+#endif
 memory_pool_impl::~memory_pool_impl() {
 
   // Default memory pools cannot be destroyed.
