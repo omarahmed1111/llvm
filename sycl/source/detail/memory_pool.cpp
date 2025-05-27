@@ -36,6 +36,7 @@ memory_pool::getPropsTuple() const {
 #else
 const property_list &memory_pool::getPropList() const {
   return impl->getPropList();
+}
 #endif
 
 __SYCL_EXPORT size_t memory_pool::get_reserved_size_current() const {
